@@ -60,7 +60,7 @@ type MoveJob struct {
 }
 
 func (j *MoveJob) Do(op unit.Operator, executor *gmap.MapObject) bool {
-	if len(j.path) > 1 {
+	if len(j.path) > 0 {
 		var xy gmap.XY
 		xy, j.path = j.path[0], j.path[1:]
 		return op.Move(xy)

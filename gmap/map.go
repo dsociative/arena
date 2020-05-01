@@ -84,20 +84,21 @@ func (a Arena) ObjectFilter(mo MapObject, filterFun func(mo MapObject) bool, f f
 	}
 }
 
-func (a Arena) getReachableByLine(position *path, target XY, pl *pathList) (*pathList, *path) {
-	direction := target.Sub(position.xy).Limit(1)
-	next := position.xy.Add(direction)
+func (a Arena) getReachableByLine(position XY, target XY, path []XY, limit int) []XY {
+	direction := target.Sub(position).Limit(1)
+	next := position.Add(direction)
 	if !a.IsBusy(next) {
-		p := &path{xy: next, prev: position}
-		pl.append(p)
-		position = p
-		return a.getReachableByLine(p, target, pl)
+		path = append(path, next)
+		position = next
+		if len(path) >= limit {
+			return path
+		}
+		return a.getReachableByLine(next, target, path, limit)
 	}
-	return pl, position
+	return path
 }
 
 func (a Arena) getReachable(position *path, target XY, pl *pathList) *pathList {
-	pl, position = a.getReachableByLine(position, target, pl)
 	for x := -1; x <= 1; x++ {
 		for y := -1; y <= 1; y++ {
 			xy := XY{x, y}
@@ -110,12 +111,12 @@ func (a Arena) getReachable(position *path, target XY, pl *pathList) *pathList {
 	return pl
 }
 
-func (a Arena) BuildPath(from, target MapObject) []XY {
-	sp := a.pathStraight(from, target, 5)
-	if sp.Len() > 0 {
-		return sp.WayBack()
+func (a Arena) BuildPath(from, target MapObject) (path []XY) {
+	path = a.getReachableByLine(from.xy, target.xy, path, 5)
+	if len(path) < 1 {
+		path = a.pathAround(from, target)
 	}
-	return a.pathAround(from, target)
+	return path
 }
 
 func (a Arena) pathAround(from MapObject, target MapObject) []XY {
@@ -163,7 +164,7 @@ func (a Arena) DrawScore(x int, st tcell.Style, total int, alive int) {
 
 func (a Arena) DrawWinner(id int, st tcell.Style) {
 	a.screen.Clear()
-	a.screen.SetContent(0, 0, ' ', []rune("Winner is " + strconv.Itoa(id)), st.Bold(true))
+	a.screen.SetContent(0, 0, ' ', []rune("Winner is "+strconv.Itoa(id)), st.Bold(true))
 	a.screen.SetContent(0, 1, ' ', []rune("Frags"), tcell.StyleDefault.Foreground(tcell.ColorAntiqueWhite))
 
 }
