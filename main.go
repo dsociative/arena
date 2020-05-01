@@ -17,6 +17,9 @@ import (
 var (
 	spawnCount = flag.Int("spawn", 1, "spawn iteration count")
 	pprof      = flag.Bool("pprof", false, "enables pprof http handler")
+	fullscreen = flag.Bool("fullscreen", false, "fullscreen")
+	x          = flag.Int("x", 50, "width")
+	y          = flag.Int("y", 50, "height")
 )
 
 func main() {
@@ -72,7 +75,11 @@ func main() {
 		}()
 	}
 
-	arena := gmap.NewArena(screen, 150, 50)
+	width, height := *x, *y
+	if *fullscreen {
+		width, height = screen.Size()
+	}
+	arena := gmap.NewArena(screen, width, height)
 	game := game.NewGame(arena, *spawnCount)
 	game.Run(ctx, keyChan)
 }

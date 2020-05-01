@@ -14,29 +14,28 @@ type Arena struct {
 	Height, Width int
 
 	objects map[int64]MapObject
-	busyLoc map[XY]bool
+	busyLoc map[XY]int64
 	screen  tcell.Screen
 }
 
 func NewArena(screen tcell.Screen, width, height int) Arena {
-	return Arena{height, width, map[int64]MapObject{}, map[XY]bool{}, screen}
+	return Arena{height, width, map[int64]MapObject{}, map[XY]int64{}, screen}
 }
 
 func (a Arena) Reset() {
 	a.screen.Clear()
 	a.objects = map[int64]MapObject{}
-	a.busyLoc = map[XY]bool{}
+	a.busyLoc = map[XY]int64{}
 	a.screen.Sync()
 }
 
 func (a Arena) IsBusy(xy XY) bool {
-	if xy.y > a.Height || xy.y < 0 {
-		return true
-	}
-	if xy.x > a.Width || xy.x < 0 {
-		return true
-	}
-	return a.busyLoc[xy] == true
+	i := a.busyLoc[xy]
+	return a.inArea(xy) || i != 0
+}
+
+func (a Arena) inArea(xy XY) bool {
+	return (xy.y > a.Height || xy.y < 0) || (xy.x > a.Width || xy.x < 0)
 }
 
 func (a Arena) NewMapObject(xy XY, o Object) {
@@ -45,8 +44,21 @@ func (a Arena) NewMapObject(xy XY, o Object) {
 
 func (a Arena) set(mo MapObject) {
 	a.objects[mo.id] = mo
-	a.busyLoc[mo.xy] = true
+	if !mo.object.Passable() {
+		a.busyLoc[mo.xy] = mo.id
+	}
 	a.paint(mo.xy, mo.object.Pic(), mo.object.Style())
+}
+
+func (a Arena) update(old, new MapObject) {
+	positionChanged := !old.xy.Equal(new.xy)
+	if positionChanged {
+		a.paint(old.xy, 0, tcell.StyleDefault)
+	}
+	if positionChanged || new.object.Passable() {
+		delete(a.busyLoc, old.xy)
+	}
+	a.set(new)
 }
 
 func (a Arena) paint(xy XY, pic rune, st tcell.Style) {
@@ -57,17 +69,15 @@ func (a Arena) Sync() {
 	a.screen.Sync()
 }
 
-func (a Arena) UpdateObject(target MapObject, f func(mo MapObject) MapObject) {
+func (a Arena) ExactObjectUpdate(target MapObject, f func(mo MapObject) MapObject) {
 	if mo, ok := a.objects[target.id]; ok && mo.xy.Equal(target.xy) {
-		//f(mo)
-		a.set(f(mo))
+		a.update(mo, f(mo))
 	}
 }
 
-func (a Arena) Update(id int64, f func(mo MapObject) MapObject) {
+func (a Arena) Object(id int64, f func(mo MapObject) MapObject) {
 	if mo, ok := a.objects[id]; ok {
 		f(mo)
-		//a.set(f(mo))
 	}
 }
 
@@ -84,7 +94,19 @@ func (a Arena) ObjectFilter(mo MapObject, filterFun func(mo MapObject) bool, f f
 	}
 }
 
-func (a Arena) getReachableByLine(position XY, target XY, path []XY, limit int) []XY {
+func (a Arena) AnythingAround(position, target MapObject) (mo MapObject, ok bool) {
+	next := position.xy.Add(target.xy.Sub(position.xy).Limit(1))
+	if !next.Equal(position.xy) {
+		var objectID int64
+		if objectID, ok = a.busyLoc[next]; ok {
+			mo, ok = a.objects[objectID]
+			return
+		}
+	}
+	return
+}
+
+func (a Arena) straightPath(position XY, target XY, path []XY, limit int) []XY {
 	direction := target.Sub(position).Limit(1)
 	next := position.Add(direction)
 	if !a.IsBusy(next) {
@@ -93,12 +115,12 @@ func (a Arena) getReachableByLine(position XY, target XY, path []XY, limit int) 
 		if len(path) >= limit {
 			return path
 		}
-		return a.getReachableByLine(next, target, path, limit)
+		return a.straightPath(next, target, path, limit)
 	}
 	return path
 }
 
-func (a Arena) getReachable(position *path, target XY, pl *pathList) *pathList {
+func (a Arena) reachable(position *path, target XY, pl *pathList) *pathList {
 	for x := -1; x <= 1; x++ {
 		for y := -1; y <= 1; y++ {
 			xy := XY{x, y}
@@ -112,7 +134,7 @@ func (a Arena) getReachable(position *path, target XY, pl *pathList) *pathList {
 }
 
 func (a Arena) BuildPath(from, target MapObject) (path []XY) {
-	path = a.getReachableByLine(from.xy, target.xy, path, 5)
+	path = a.straightPath(from.xy, target.xy, path, 5)
 	if len(path) < 1 {
 		path = a.pathAround(from, target)
 	}
@@ -120,13 +142,13 @@ func (a Arena) BuildPath(from, target MapObject) (path []XY) {
 }
 
 func (a Arena) pathAround(from MapObject, target MapObject) []XY {
-	reachable := a.getReachable(&path{xy: from.xy}, target.xy, &pathList{explored: map[XY]bool{}})
+	reachable := a.reachable(&path{xy: from.xy}, target.xy, &pathList{explored: map[XY]bool{}})
 	for reachable.Len() > 0 {
 		node := reachable.pop()
 		if node.xy.Equal(target.xy) {
 			return node.WayBack()
 		}
-		reachable = a.getReachable(node, target.xy, reachable)
+		reachable = a.reachable(node, target.xy, reachable)
 	}
 	return nil
 }
@@ -142,9 +164,7 @@ func (a Arena) ObjectsIDs() (mos []int64) {
 
 func (a Arena) Move(mo MapObject, target XY) (ok bool) {
 	if !a.IsBusy(target) {
-		a.UpdateObject(mo, func(old MapObject) MapObject {
-			delete(a.busyLoc, old.xy)
-			a.paint(old.xy, 0, tcell.StyleDefault)
+		a.ExactObjectUpdate(mo, func(old MapObject) MapObject {
 			mo.xy = target
 			ok = true
 			return mo

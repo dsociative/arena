@@ -95,7 +95,7 @@ func (g *game) tick() {
 	alive := map[unit.Faction]int{}
 
 	for _, id := range g.gameMap.ObjectsIDs() {
-		g.gameMap.Update(id, func(mo gmap.MapObject) gmap.MapObject {
+		g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
 			if unit, ok := mo.Object().(unit.Unit); ok {
 				alive[unit.FactionData()] ++
 				o := operator{g, mo, unit}
@@ -123,7 +123,7 @@ func (g *game) tick() {
 
 		killCount := map[unit.Faction]int{}
 		for _, id := range g.gameMap.ObjectsIDs() {
-			g.gameMap.Update(id, func(mo gmap.MapObject) gmap.MapObject {
+			g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
 				if unit, ok := mo.Object().(unit.Corpse); ok {
 					killCount[unit.KilledBy.FactionData()] ++
 				}

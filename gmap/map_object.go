@@ -10,7 +10,8 @@ var nextMapObject atomic.Int64
 type Object interface {
 	Pic() rune
 	Style() tcell.Style
-	Hit(*MapObject, MapObject, int)
+	Hit(*MapObject, MapObject, int) bool
+	Passable() bool
 }
 
 type MapObject struct {
@@ -35,8 +36,8 @@ func (mo *MapObject) SetObject(o Object) {
 	mo.object = o
 }
 
-func (mo *MapObject) Hit(whom MapObject, i int) {
-	mo.object.Hit(mo, whom, i)
+func (mo *MapObject) Hit(whom MapObject, i int) bool {
+	return mo.object.Hit(mo, whom, i)
 }
 
 func newMapObject(xy XY, object Object) MapObject {

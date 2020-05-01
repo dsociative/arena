@@ -5,6 +5,8 @@ import (
 	"github.com/dsociative/arena/unit"
 )
 
+var _ unit.Operator = operator{}
+
 type operator struct {
 	game *game
 	mo   gmap.MapObject
@@ -25,7 +27,11 @@ func (o operator) KillClosestEnemy() (j unit.Job) {
 				j = &KillJob{enemyMO}
 			} else {
 				path := o.game.gameMap.BuildPath(o.mo, enemyMO)
-				j = &MoveJob{path}
+				if len(path) > 0 {
+					j = &MoveJob{path}
+				} else {
+					j = &KillAnythingBTW{target: enemyMO}
+				}
 			}
 			return enemyMO
 		},
@@ -33,11 +39,13 @@ func (o operator) KillClosestEnemy() (j unit.Job) {
 	return
 }
 
+func (o operator) AnythingBTW(target gmap.MapObject) (gmap.MapObject, bool) {
+	return o.game.gameMap.AnythingAround(o.mo, target)
+}
+
 func (o operator) Hit(target gmap.MapObject) (ok bool) {
-	o.game.gameMap.UpdateObject(target, func(mo gmap.MapObject) gmap.MapObject {
-		if _, ok := mo.Object().(unit.Unit); ok {
-			mo.Hit(o.mo, 1)
-		}
+	o.game.gameMap.ExactObjectUpdate(target, func(mo gmap.MapObject) gmap.MapObject {
+		mo.Hit(o.mo, 1)
 		return mo
 	})
 	return
@@ -64,6 +72,22 @@ func (j *MoveJob) Do(op unit.Operator, executor *gmap.MapObject) bool {
 		var xy gmap.XY
 		xy, j.path = j.path[0], j.path[1:]
 		return op.Move(xy)
+	}
+	return false
+}
+
+type KillAnythingBTW struct {
+	target gmap.MapObject
+	killJob unit.Job
+}
+
+func (j *KillAnythingBTW) Do(op unit.Operator, executor *gmap.MapObject) bool {
+	if j.killJob != nil {
+		return j.killJob.Do(op, executor)
+	}
+	if target, ok := op.AnythingBTW(j.target); ok {
+		j.killJob = &KillJob{target: target}
+		return true
 	}
 	return false
 }
