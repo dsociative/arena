@@ -5,6 +5,14 @@ type path struct {
 	prev *path
 }
 
+func newPath(xy XY, prev *path) *path {
+	return &path{xy, prev}
+}
+
+func newRootPath(xy XY) *path {
+	return newPath(xy, nil)
+}
+
 func (p *path) String() string {
 	return p.xy.String()
 }
@@ -25,6 +33,10 @@ func (p *path) WayBack() (way []XY) {
 type pathList struct {
 	paths    []*path
 	explored map[XY]bool
+}
+
+func newPathList() *pathList {
+	return &pathList{explored: map[XY]bool{}}
 }
 
 func (pl *pathList) append(p *path) {

@@ -15,16 +15,19 @@ import (
 )
 
 var (
-	spawnCount = flag.Int("spawn", 1, "spawn iteration count")
+	spawnCount = flag.Int("spawn", 10, "spawn iteration count")
 	pprof      = flag.Bool("pprof", false, "enables pprof http handler")
+	pprofAddr  = flag.String("pprofAddr", "localhost:8787", "addr for pprof handler")
 	fullscreen = flag.Bool("fullscreen", false, "fullscreen")
-	x          = flag.Int("x", 50, "width")
-	y          = flag.Int("y", 50, "height")
+	tick       = flag.Duration("tick", time.Millisecond*50, "world tick duration")
+	x          = flag.Int("x", 80, "width")
+	y          = flag.Int("y", 40, "height")
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
+
 	tcell.SetEncodingFallback(tcell.EncodingFallbackASCII)
 	screen, err := tcell.NewScreen()
 	if err != nil {
@@ -34,6 +37,19 @@ func main() {
 
 	if err = screen.Init(); err != nil {
 		log.Fatal(err)
+	}
+
+	width, height := *x, *y
+	if *fullscreen {
+		width, height = screen.Size()
+	}
+
+	if width < 5 || height < 5 {
+		log.Fatal("minimum screen size 5x5")
+	}
+
+	if *spawnCount < 1 {
+		log.Fatal("minimum spawn count 1")
 	}
 
 	screen.SetStyle(tcell.StyleDefault.
@@ -55,8 +71,6 @@ func main() {
 				}
 
 				switch ev.Key() {
-				case tcell.KeyCtrlP:
-					gmap.Debug.Toggle()
 				case tcell.KeyEscape, tcell.KeyEnter:
 					closeFun()
 					return
@@ -71,15 +85,11 @@ func main() {
 
 	if *pprof {
 		go func() {
-			http.ListenAndServe("localhost:8787", nil)
+			http.ListenAndServe(*pprofAddr, nil)
 		}()
 	}
 
-	width, height := *x, *y
-	if *fullscreen {
-		width, height = screen.Size()
-	}
 	arena := gmap.NewArena(screen, width, height)
-	game := game.NewGame(arena, *spawnCount)
+	game := game.NewGame(arena, *spawnCount, *tick)
 	game.Run(ctx, keyChan)
 }

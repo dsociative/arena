@@ -20,16 +20,18 @@ const (
 )
 
 type game struct {
-	state      gameState
-	spawnCount int
-	gameMap    gmap.Arena
-	total      map[unit.Faction]int
-	factions   []unit.Faction
+	state        gameState
+	tickDuration time.Duration
+	spawnCount   int
+	gameMap      gmap.Arena
+	total        map[unit.Faction]int
+	factions     []unit.Faction
 }
 
-func NewGame(gm gmap.Arena, spawnCount int) *game {
+func NewGame(gm gmap.Arena, spawnCount int, tickDuration time.Duration) *game {
 	return &game{
 		gameNew,
+		tickDuration,
 		spawnCount,
 		gm,
 		map[unit.Faction]int{},
@@ -64,7 +66,7 @@ func (g *game) Spawn(x, y int, u unit.Unit) bool {
 }
 
 func (g *game) Run(ctx context.Context, keys chan *tcell.EventKey) {
-	ticker := time.NewTicker(time.Millisecond * 50)
+	ticker := time.NewTicker(g.tickDuration)
 	for {
 		switch g.state {
 		case gameNew:
@@ -98,9 +100,9 @@ func (g *game) tick() {
 		g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
 			if unit, ok := mo.Object().(unit.Unit); ok {
 				alive[unit.FactionData()] ++
-				o := operator{g, mo, unit}
+				o := operator{g, mo}
 				if j := unit.Do(o); j != nil {
-					if !j.Do(o, &mo) {
+					if !j.Do(o) {
 						unit.Done()
 					}
 				}
@@ -115,25 +117,28 @@ func (g *game) tick() {
 
 	if len(alive) <= 1 {
 		g.state = gameEnd
+		g.drawGameResult(alive)
+	}
+}
 
-		var winner unit.Faction
-		for f, _ := range alive {
-			winner = f
-		}
+func (g *game) drawGameResult(alive map[unit.Faction]int) {
+	var winner unit.Faction
+	for f, _ := range alive {
+		winner = f
+	}
 
-		killCount := map[unit.Faction]int{}
-		for _, id := range g.gameMap.ObjectsIDs() {
-			g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
-				if unit, ok := mo.Object().(unit.Corpse); ok {
-					killCount[unit.KilledBy.FactionData()] ++
-				}
-				return mo
-			})
-		}
+	killCount := map[unit.Faction]int{}
+	for _, id := range g.gameMap.ObjectsIDs() {
+		g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
+			if corpse, ok := mo.Object().(unit.Corpse); ok {
+				killCount[corpse.KilledBy.FactionData()] ++
+			}
+			return mo
+		})
+	}
 
-		g.gameMap.DrawWinner(winner.FactionID(), winner.Style())
-		for f, frags := range killCount {
-			g.gameMap.DrawFrags(f.FactionID(), f.Style(), frags)
-		}
+	g.gameMap.DrawWinner(winner.FactionID(), winner.Style())
+	for f, frags := range killCount {
+		g.gameMap.DrawFrags(f.FactionID(), f.Style(), frags)
 	}
 }

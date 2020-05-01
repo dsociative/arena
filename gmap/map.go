@@ -3,12 +3,9 @@ package gmap
 import (
 	"fmt"
 	"github.com/gdamore/tcell"
-	"go.uber.org/atomic"
 	"sort"
 	"strconv"
 )
-
-var Debug = atomic.Bool{}
 
 type Arena struct {
 	Height, Width int
@@ -94,7 +91,7 @@ func (a Arena) ObjectFilter(mo MapObject, filterFun func(mo MapObject) bool, f f
 	}
 }
 
-func (a Arena) AnythingAround(position, target MapObject) (mo MapObject, ok bool) {
+func (a Arena) AnythingBTW(position, target MapObject) (mo MapObject, ok bool) {
 	next := position.xy.Add(target.xy.Sub(position.xy).Limit(1))
 	if !next.Equal(position.xy) {
 		var objectID int64
@@ -104,6 +101,14 @@ func (a Arena) AnythingAround(position, target MapObject) (mo MapObject, ok bool
 		}
 	}
 	return
+}
+
+func (a Arena) BuildPath(from, target MapObject) (path []XY) {
+	path = a.straightPath(from.xy, target.xy, path, 5)
+	if len(path) < 1 {
+		path = a.pathAround(from, target)
+	}
+	return path
 }
 
 func (a Arena) straightPath(position XY, target XY, path []XY, limit int) []XY {
@@ -123,8 +128,7 @@ func (a Arena) straightPath(position XY, target XY, path []XY, limit int) []XY {
 func (a Arena) reachable(position *path, target XY, pl *pathList) *pathList {
 	for x := -1; x <= 1; x++ {
 		for y := -1; y <= 1; y++ {
-			xy := XY{x, y}
-			next := position.xy.Add(xy)
+			next := position.xy.Add(XY{x, y})
 			if !a.IsBusy(next) || next.Equal(target) {
 				pl.append(&path{xy: next, prev: position})
 			}
@@ -133,16 +137,8 @@ func (a Arena) reachable(position *path, target XY, pl *pathList) *pathList {
 	return pl
 }
 
-func (a Arena) BuildPath(from, target MapObject) (path []XY) {
-	path = a.straightPath(from.xy, target.xy, path, 5)
-	if len(path) < 1 {
-		path = a.pathAround(from, target)
-	}
-	return path
-}
-
 func (a Arena) pathAround(from MapObject, target MapObject) []XY {
-	reachable := a.reachable(&path{xy: from.xy}, target.xy, &pathList{explored: map[XY]bool{}})
+	reachable := a.reachable(newRootPath(from.xy), target.xy, newPathList())
 	for reachable.Len() > 0 {
 		node := reachable.pop()
 		if node.xy.Equal(target.xy) {
@@ -183,12 +179,11 @@ func (a Arena) DrawScore(x int, st tcell.Style, total int, alive int) {
 }
 
 func (a Arena) DrawWinner(id int, st tcell.Style) {
-	a.screen.Clear()
-	a.screen.SetContent(0, 0, ' ', []rune("Winner is "+strconv.Itoa(id)), st.Bold(true))
-	a.screen.SetContent(0, 1, ' ', []rune("Frags"), tcell.StyleDefault.Foreground(tcell.ColorAntiqueWhite))
+	a.screen.SetContent(0, 1, ' ', []rune("Winner is "+strconv.Itoa(id)), st.Bold(true))
+	a.screen.SetContent(0, 2, ' ', []rune("Frags"), tcell.StyleDefault.Foreground(tcell.ColorAntiqueWhite))
 
 }
 
 func (a Arena) DrawFrags(id int, st tcell.Style, frags int) {
-	a.screen.SetContent(0, id+2, ' ', []rune(fmt.Sprintf("%d: %d", id, frags)), st)
+	a.screen.SetContent(0, id+3, ' ', []rune(fmt.Sprintf("%d: %d", id, frags)), st)
 }
