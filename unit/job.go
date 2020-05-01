@@ -28,4 +28,3 @@ func (j *JobQueue) Done() {
 func (j *JobQueue) Job() Job {
 	return j.job
 }
-

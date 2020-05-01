@@ -99,7 +99,7 @@ func (g *game) tick() {
 	for _, id := range g.gameMap.ObjectsIDs() {
 		g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
 			if unit, ok := mo.Object().(unit.Unit); ok {
-				alive[unit.FactionData()] ++
+				alive[unit.FactionData()]++
 				o := operator{g, mo}
 				if j := unit.Do(o); j != nil {
 					if !j.Do(o) {
@@ -131,7 +131,7 @@ func (g *game) drawGameResult(alive map[unit.Faction]int) {
 	for _, id := range g.gameMap.ObjectsIDs() {
 		g.gameMap.Object(id, func(mo gmap.MapObject) gmap.MapObject {
 			if corpse, ok := mo.Object().(unit.Corpse); ok {
-				killCount[corpse.KilledBy.FactionData()] ++
+				killCount[corpse.KilledBy.FactionData()]++
 			}
 			return mo
 		})

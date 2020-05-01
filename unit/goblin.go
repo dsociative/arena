@@ -30,4 +30,3 @@ func (g *Goblin) Do(op Operator) Job {
 	}
 	return j
 }
-

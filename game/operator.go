@@ -53,4 +53,3 @@ func (o operator) Hit(target gmap.MapObject) (ok bool) {
 func (o operator) Move(target gmap.XY) (ok bool) {
 	return o.game.gameMap.Move(o.mo, target)
 }
-
